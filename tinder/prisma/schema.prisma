@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+    url      = "file:./dev.db"
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  passwordHash String
+  isVerified   Boolean        @default(false)
+  role         String         @default("user")
+  profile      Profile?
+  refreshTokens RefreshToken[]
+  reportsMade  Report[]       @relation("reports_made")
+  reportsRecvd Report[]       @relation("reports_received")
+  blocks       Block[]        @relation("blocks")
+  blockedBy    Block[]        @relation("blockedBy")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model Profile {
+  id          String   @id @default(uuid())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String   @unique
+  displayName String
+  age         Int
+  bio         String?
+  photos      String[] @default([]) // array of photo URLs
+  interests   String[] @default([])
+  gender      String?
+  city        String?
+  lat         Float?   // latitude for geolocation
+  lng         Float?   // longitude for geolocation
+  distanceKm  Int?     // preferred max distance in km
+  preferences Json?    // flexible JSON for future preference rules
+  visibility  Boolean  @default(true)
+  lastActive  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([lat, lng])
+}
+
+// ----- Swipes, Matches and Messaging -----
+model Swipe {
+  id        String   @id @default(uuid())
+  fromUser  String
+  toUser    String
+  liked     Boolean
+  createdAt DateTime @default(now())
+
+  @@unique([fromUser, toUser])
+  @@index([fromUser])
+  @@index([toUser])
+}
+
+model Match {
+  id        String   @id @default(uuid())
+  userA     String
+  userB     String
+  createdAt DateTime @default(now())
+
+  // helpful for queries
+  @@index([userA])
+  @@index([userB])
+  @@unique([userA, userB])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  matchId   String
+  senderId  String
+  text      String
+  createdAt DateTime @default(now())
+  // optional: delivered or read status can be added per recipient
+  @@index([matchId])
+  @@index([senderId])
+}
+
+// ----- Auth helpers -----
+model RefreshToken {
+  id         String   @id @default(uuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  tokenHash  String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  revoked    Boolean  @default(false)
+
+  @@index([userId])
+}
+
+// ----- Moderation -----
+model Report {
+  id             String   @id @default(uuid())
+  reporter       User     @relation("reports_made", fields: [reporterId], references: [id])
+  reporterId     String
+  reportedUser   User     @relation("reports_received", fields: [reportedUserId], references: [id])
+  reportedUserId String
+  reason         String
+  details        Json?
+  status         ReportStatus @default(PENDING)
+  createdAt      DateTime     @default(now())
+
+  @@index([reportedUserId])
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  DISMISSED
+}
+
+model Block {
+  id            String   @id @default(uuid())
+  user          User     @relation("blocks", fields: [userId], references: [id])
+  userId        String
+  blockedUser   User     @relation("blockedBy", fields: [blockedUserId], references: [id])
+  blockedUserId String
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, blockedUserId])
+}
+
+// ----- Premium / Payments -----
+model Subscription {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  provider   String
+  plan       String
+  status     String
+  startedAt  DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime @default(now())
+}
+
